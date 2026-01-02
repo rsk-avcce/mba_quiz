@@ -1,60 +1,165 @@
 import streamlit as st
 import pandas as pd
+import os
 
-# 1. Load and Clean Data
+# --- 1. Session State Initialization ---
+if 'current_question' not in st.session_state:
+    st.session_state.current_question = 0
+if 'answers' not in st.session_state:
+    st.session_state.answers = {}
+if 'quiz_submitted' not in st.session_state:
+    st.session_state.quiz_submitted = False
+if 'quiz_active' not in st.session_state:
+    st.session_state.quiz_active = False
+if 'selected_subject' not in st.session_state:
+    st.session_state.selected_subject = None
+if 'selected_week' not in st.session_state:
+    st.session_state.selected_week = None
+
+# --- 2. Helper Functions ---
+
 @st.cache_data
-def load_data():
-    # Read the CSV file
-    file_name = "Data/BC_Quizzes.csv"
-    try:
-        df = pd.read_csv(file_name)
+def load_data(subject, week):
+    # Map the Subject Name (from Dropdown) to the Folder/File Abbreviation
+    subject_to_abbr = {
+        "Principles of Management": "POM",
+        "Managerial Economics": "ME",
+        "Financial Accounting": "FA",
+        "Business Communication": "BC",
+        "Business statistics": "BS"
+    }
+    
+    abbr = subject_to_abbr.get(subject)
+    
+    if abbr:
+        # Construct the file path: Data/{Abbr}/{Abbr}_Quizzes.xlsx
+        # Example: Data/POM/POM_Quizzes.xlsx
+        file_path = os.path.join("Data", abbr, f"{abbr}_Quizzes.xlsx")
         
-        # Clean up whitespace from all string columns to avoid matching errors
-        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-        return df
-    except FileNotFoundError:
-        st.error(f"File not found: {file_name}. Please make sure the file is in the same directory.")
-        return pd.DataFrame()
+        # Check if the Excel file exists
+        if os.path.exists(file_path):
+            try:
+                # Read the specific sheet corresponding to the selected week
+                # sheet_name expects exact string match, e.g., "Week 1"
+                df = pd.read_excel(file_path, sheet_name=week)
+                
+                # Drop QuestionID if it exists, as requested
+                if 'QuestionID' in df.columns:
+                    df = df.drop(columns=['QuestionID'])
+                
+                # Clean up whitespace from string columns
+                df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+                
+                return df
+                
+            except ValueError:
+                # This error occurs if the specific Sheet (e.g., "Week 5") 
+                # doesn't exist in the Excel file.
+                st.error(f"Sheet '{week}' not found in file: {file_path}")
+                return None
+            except Exception as e:
+                st.error(f"Error reading file: {e}")
+                return None
+        else:
+            # File does not exist at the expected path
+            st.error(f"File not found: {file_path}")
+            return None
+    else:
+        return None
 
-df = load_data()
+def next_question():
+    st.session_state.current_question += 1
 
-if not df.empty:
-    # 2. Initialize Session State
-    # current_question: Tracks the index of the question currently being displayed
-    if 'current_question' not in st.session_state:
-        st.session_state.current_question = 0
+def prev_question():
+    st.session_state.current_question -= 1
+
+def submit_quiz():
+    st.session_state.quiz_submitted = True
+
+def restart_quiz():
+    st.session_state.current_question = 0
+    st.session_state.answers = {}
+    st.session_state.quiz_submitted = False
+    # We do NOT reset quiz_active here, so they can retry the same subject.
+    # To go back to home, they can reload the page or we add a "Home" button.
+    st.rerun()
+
+def go_home():
+    st.session_state.quiz_active = False
+    st.session_state.current_question = 0
+    st.session_state.answers = {}
+    st.session_state.quiz_submitted = False
+    st.rerun()
+
+# --- 3. Main Application Flow ---
+
+# A. SELECTION SCREEN (Display this if quiz is not active)
+if not st.session_state.quiz_active:
+    st.title("Student Quiz Portal")
+    st.write("Please select your Subject and Week to begin.")
+
+    # 1. Subject Dropdown
+    subjects = [
+        "--Select Subject--",
+        "Principles of Management",
+        "Managerial Economics",
+        "Financial Accounting",
+        "Business Communication",
+        "Business Statistics"
+    ]
     
-    # answers: Dictionary to store user's selected option for each question index
-    if 'answers' not in st.session_state:
-        st.session_state.answers = {}
+    selected_subject = st.selectbox("Subject:", subjects)
+
+    # 2. Week Dropdown
+    # Validation: Logic to prompt user if subject is not selected
+    week_options = ["--Select Week--"]
+    if selected_subject != "--Select Subject--":
+        week_options += [f"Week {i}" for i in range(1, 13)]
+        selected_week = st.selectbox("Week:", week_options)
+    else:
+        # If subject not selected, show disabled or dummy box and a warning if they try to interact
+        selected_week = st.selectbox("Week:", ["--Select Subject First--"], disabled=True)
+        st.info("Please select a Subject to unlock the Week selection.")
+
+    # 3. Start Button with Validation
+    if st.button("Start Quiz"):
+        if selected_subject == "--Select Subject--":
+            st.error("❗ You must select a Subject.")
+        elif selected_week == "--Select Week--" or selected_week == "--Select Subject First--":
+            st.error("❗ You must select a Week.")
+        else:
+            # Check if file exists before starting
+            df_check = load_data(selected_subject, selected_week)
+            if df_check is not None and not df_check.empty:
+                st.session_state.selected_subject = selected_subject
+                st.session_state.selected_week = selected_week
+                st.session_state.quiz_active = True
+                st.rerun()
+            else:
+                st.error(f"❌ Could not find the quiz file for: {selected_subject} ({selected_week}). Please ensure the file exists.")
+
+# B. QUIZ SCREEN (Display this if quiz IS active)
+else:
+    # Load the data based on saved state
+    df = load_data(st.session_state.selected_subject, st.session_state.selected_week)
     
-    # quiz_submitted: Boolean flag to check if the quiz is finished
-    if 'quiz_submitted' not in st.session_state:
-        st.session_state.quiz_submitted = False
+    # Sidebar for context
+    with st.sidebar:
+        st.write(f"**Subject:** {st.session_state.selected_subject}")
+        st.write(f"**Week:** {st.session_state.selected_week}")
+        if st.button("Back to Home"):
+            go_home()
 
-    # 3. Define Navigation Functions
-    def next_question():
-        st.session_state.current_question += 1
-
-    def prev_question():
-        st.session_state.current_question -= 1
-
-    def submit_quiz():
-        st.session_state.quiz_submitted = True
-
-    # 4. Main App Logic
     if not st.session_state.quiz_submitted:
         # --- Display Question Page ---
-        
         current_idx = st.session_state.current_question
         question_data = df.iloc[current_idx]
         
-        # Display Question
-        st.title("Business Communication - Quiz")
-        st.subheader(f"Question {current_idx + 1} of {len(df)}")
+        st.title(f"Question {current_idx + 1}")
+        st.progress((current_idx + 1) / len(df)) # Optional: Progress bar
+        
         st.write(question_data['Question'])
         
-        # Prepare Options
         options = [
             question_data['Option_A'],
             question_data['Option_B'],
@@ -62,17 +167,12 @@ if not df.empty:
             question_data['Option_D']
         ]
         
-        # Check if there is a previously saved answer for this question
         saved_answer = st.session_state.answers.get(current_idx, None)
-        
-        # Determine the index for the radio button (default to 0 if not answered yet)
         try:
             radio_index = options.index(saved_answer) if saved_answer in options else 0
         except ValueError:
             radio_index = 0
 
-        # Display Options
-        # We use a specific key for each question so Streamlit knows they are different widgets
         selected_option = st.radio(
             "Select an answer:", 
             options, 
@@ -80,20 +180,16 @@ if not df.empty:
             key=f"q_radio_{current_idx}" 
         )
         
-        # Save the selection immediately to session state
         st.session_state.answers[current_idx] = selected_option
         
-        # Navigation Buttons
         st.write("---")
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col1:
-            # Show Previous button if not on the first question
             if current_idx > 0:
                 st.button("Previous", on_click=prev_question)
         
         with col3:
-            # Show Next button if not on the last question, else Show Submit
             if current_idx < len(df) - 1:
                 st.button("Next", on_click=next_question)
             else:
@@ -106,15 +202,12 @@ if not df.empty:
         correct_answer_count = 0
         summary_data = []
 
-        # Calculate Score and Build Summary
         for idx, row in df.iterrows():
             user_selection = st.session_state.answers.get(idx, None)
             
-            # Map the correct answer letter (A, B, C, D) to the actual option text
-            correct_option_letter = row['Answer'] # e.g., 'A'
+            correct_option_letter = row['Answer']
             correct_option_text = row[f"Option_{correct_option_letter}"]
             
-            # Check if correct
             is_correct = (user_selection == correct_option_text)
             
             if is_correct:
@@ -127,32 +220,24 @@ if not df.empty:
                 "Correct Answer": correct_option_text
             })
 
-        # Display Final Score
         st.success(f"You scored {correct_answer_count} out of {len(df)}")
         
-        # Display Detailed Summary
-        st.write("### Quiz Summary & Score")
+        st.write("### Detailed Summary")
         summary_df = pd.DataFrame(summary_data)
-
-        # Function to style the 'Your Answer' column based on correctness
+        
+        # Style function for Green/Red User Answers
         def highlight_user_answer(row):
-            # Check if the user's answer matches the correct answer
             is_correct = row['Your Answer'] == row['Correct Answer']
             color = 'green' if is_correct else 'red'
-            
-            # return a list of css styles, one for each column in the row
             return [f'color: {color}' if col == 'Your Answer' else '' for col in row.index]
 
-        # Apply the style row-wise (axis=1) and display
         st.dataframe(
-            summary_df.style.apply(highlight_user_answer, axis=1),
+            summary_df.style.apply(highlight_user_answer, axis=1), 
             hide_index=True
         )
-
-        # Restart Button
-        if st.button("Restart Quiz"):
-            # Reset all state variables
-            st.session_state.current_question = 0
-            st.session_state.answers = {}
-            st.session_state.quiz_submitted = False
-            st.rerun()
+        
+        col_restart, col_home = st.columns(2)
+        with col_restart:
+            st.button("Retry This Quiz", on_click=restart_quiz)
+        with col_home:
+            st.button("Select New Quiz", on_click=go_home)
