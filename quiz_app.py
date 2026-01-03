@@ -26,7 +26,7 @@ def load_data(subject, week):
         "Managerial Economics": "ME",
         "Financial Accounting": "FA",
         "Business Communication": "BC",
-        "Business statistics": "BS"
+        "Business Statistics": "BS"
     }
     
     abbr = subject_to_abbr.get(subject)
@@ -241,3 +241,4 @@ else:
             st.button("Retry This Quiz", on_click=restart_quiz)
         with col_home:
             st.button("Select New Quiz", on_click=go_home)
+
