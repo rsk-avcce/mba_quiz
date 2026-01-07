@@ -26,7 +26,7 @@ def load_data(subject, week):
         "Managerial Economics": "ME",
         "Financial Accounting": "FA",
         "Business Communication": "BC",
-        "Business Statistics": "BS"
+        "Business statistics": "BS"
     }
     
     abbr = subject_to_abbr.get(subject)
@@ -202,9 +202,10 @@ else:
         correct_answer_count = 0
         summary_data = []
 
+        # Calculate Score and Build Summary Data
         for idx, row in df.iterrows():
             user_selection = st.session_state.answers.get(idx, None)
-            
+        
             correct_option_letter = row['Answer']
             correct_option_text = row[f"Option_{correct_option_letter}"]
             
@@ -220,25 +221,30 @@ else:
                 "Correct Answer": correct_option_text
             })
 
+        # Display Final Score
         st.success(f"You scored {correct_answer_count} out of {len(df)}")
         
-        st.write("### Detailed Summary")
-        summary_df = pd.DataFrame(summary_data)
+        # --- Display Detailed Summary as a List ---
+        st.subheader("Detailed Summary")
         
-        # Style function for Green/Red User Answers
-        def highlight_user_answer(row):
-            is_correct = row['Your Answer'] == row['Correct Answer']
-            color = 'green' if is_correct else 'red'
-            return [f'color: {color}' if col == 'Your Answer' else '' for col in row.index]
-
-        st.dataframe(
-            summary_df.style.apply(highlight_user_answer, axis=1), 
-            hide_index=True
-        )
+        for item in summary_data:
+            # Display Question
+            st.write(f"**{item['Question No.']}. {item['Question']}**")
+            
+            # Display User Answer with Green/Red Logic
+            if item['Your Answer'] == item['Correct Answer']:
+                st.markdown(f"**Your Answer:** :green[{item['Your Answer']}]")
+            else:
+                st.markdown(f"**Your Answer:** :red[{item['Your Answer']}]")
+                
+            # Display Correct Answer
+            st.write(f"**Correct Answer:** {item['Correct Answer']}")
+            
+            # Add a visual separator line
+            st.divider()
         
         col_restart, col_home = st.columns(2)
         with col_restart:
             st.button("Retry This Quiz", on_click=restart_quiz)
         with col_home:
             st.button("Select New Quiz", on_click=go_home)
-
