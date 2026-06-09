@@ -22,11 +22,11 @@ if 'selected_week' not in st.session_state:
 def load_data(subject, week):
     # Map the Subject Name (from Dropdown) to the Folder/File Abbreviation
     subject_to_abbr = {
-        "Principles of Management": "POM",
-        "Managerial Economics": "ME",
-        "Financial Accounting": "FA",
-        "Business Communication": "BC",
-        "Business Statistics": "BS"
+        "Human Resource Management": "HRM",
+        "Marketing Management": "MM",
+        "Operations Management": "OM",
+        "Strategic Management": "SM",
+        "Financial Management": "FM"
     }
     
     abbr = subject_to_abbr.get(subject)
@@ -101,11 +101,11 @@ if not st.session_state.quiz_active:
     # 1. Subject Dropdown
     subjects = [
         "--Select Subject--",
-        "Principles of Management",
-        "Managerial Economics",
-        "Financial Accounting",
-        "Business Communication",
-        "Business Statistics"
+        "Human Resource Management",
+        "Marketing Management",
+        "Operations Management",
+        "Strategic Management",
+        "Financial Management"
     ]
     
     selected_subject = st.selectbox("Subject:", subjects)
